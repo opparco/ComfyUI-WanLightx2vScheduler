@@ -62,22 +62,24 @@ class KSamplerAdvancedPartialSigmas(ComfyNodeABC):
             "sampler_name": (comfy.samplers.KSampler.SAMPLERS, ),
             "sigmas": (IO.SIGMAS, {}),
             "cfg": (IO.FLOAT, {"default": 1.0, "min": 0.0, "max": 100.0, "step": 0.1}),
-            "start_at_step": (IO.INT, {"default": 0, "min": 0, "max": 100000}),
-            "end_at_step": (IO.INT, {"default": 4, "min": 1, "max": 100001}),
+            "steps": (IO.INT, {"default": 4, "min": 1, "max": 10000}),
             "add_noise": (IO.BOOLEAN, {"default": True}),
             "noise_seed": (IO.INT, {"default": 0, "min": 0, "max": 0xffffffffffffffff, "control_after_generate": True}), }}
 
-    RETURN_TYPES = (IO.LATENT, IO.LATENT)
-    RETURN_NAMES = ("output", "denoised_output")
+    RETURN_TYPES = (IO.LATENT, IO.LATENT, IO.SIGMAS)
+    RETURN_NAMES = ("output", "denoised_output", "sigmas")
     FUNCTION = "sample"
     CATEGORY = "sampling/custom_sampling"
 
-    def sample(self, model, positive, negative, latent_image, sampler_name, sigmas, cfg, start_at_step, end_at_step, add_noise, noise_seed):
-        total_steps = max(sigmas.shape[-1] - 1, 0)
-        start = max(0, min(int(start_at_step), total_steps))
-        end = max(start + 1, min(int(end_at_step) + 1, total_steps + 1))
-        sigmas_slice = sigmas[start:end]
-        print("SIGMAS slice:", sigmas_slice)
+    def sample(self, model, positive, negative, latent_image, sampler_name, sigmas, cfg, steps, add_noise, noise_seed):
+        max_steps = max(sigmas.shape[-1] - 1, 0)
+        steps = min(steps, max_steps)
+
+        current_sigmas = sigmas[:steps + 1]
+        next_sigmas = sigmas[steps:]
+
+        print("current SIGMAS:", current_sigmas)
+        print("next SIGMAS:", next_sigmas)
 
         latent = latent_image.copy()
         x = comfy.sample.fix_empty_latent_channels(model, latent["samples"])
@@ -91,7 +93,7 @@ class KSamplerAdvancedPartialSigmas(ComfyNodeABC):
 
         noise_mask = latent.get("noise_mask", None)
         x0_output = {}
-        callback = latent_preview.prepare_callback(model, sigmas_slice.shape[-1] - 1, x0_output)
+        preview_callback = latent_preview.prepare_callback(model, current_sigmas.shape[-1] - 1, x0_output)
         disable_pbar = not comfy.utils.PROGRESS_BAR_ENABLED
 
         sampler = comfy.samplers.sampler_object(sampler_name)
@@ -101,12 +103,12 @@ class KSamplerAdvancedPartialSigmas(ComfyNodeABC):
             noise=noise,
             cfg=float(cfg),
             sampler=sampler,
-            sigmas=sigmas_slice,
+            sigmas=current_sigmas,
             positive=positive,
             negative=negative,
             latent_image=x,
             noise_mask=noise_mask,
-            callback=callback,
+            callback=preview_callback,
             disable_pbar=disable_pbar,
             seed=noise_seed,
         )
@@ -120,7 +122,7 @@ class KSamplerAdvancedPartialSigmas(ComfyNodeABC):
         else:
             out_denoised = out
 
-        return (out, out_denoised)
+        return (out, out_denoised, next_sigmas)
 
 # registration
 NODE_CLASS_MAPPINGS = {
