@@ -53,8 +53,7 @@ This package generates **custom sigmas** that recreate the exact denoising traje
   - `sampler_name`: Sampler algorithm
   - `sigmas`: Custom sigma schedule
   - `cfg`: CFG scale (0.0-100.0, default: 1.0)
-  - `start_at_step`: Starting step (default: 0)
-  - `end_at_step`: Ending step (default: 4)
+  - `steps`: Number of steps to execute (1-10000, default: 4)
   - `add_noise`: Whether to add noise (default: True)
   - `noise_seed`: Random seed for noise generation
 - **Outputs**: 
